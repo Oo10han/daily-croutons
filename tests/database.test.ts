@@ -24,7 +24,7 @@ test('备份合并覆盖同日，保留其他日期；无效备份不能部分�
     source.save({ date: '2024-02-29', title: '备份', body: '内容', mood: '' })
     target.save({ date: '2024-02-29', title: '旧内容', body: '', mood: '' })
     target.save({ date: '2024-03-01', title: '保留', body: '', mood: '' })
-    assert.equal(target.restore(JSON.parse(JSON.stringify(source.backup()))), 1)
+    assert.deepEqual(target.restore(JSON.parse(JSON.stringify(source.backup()))), { diaries: 1, transactions: 0 })
     assert.equal(target.get('2024-02-29')?.title, '备份')
     assert.equal(target.get('2024-03-01')?.title, '保留')
     const bad = source.backup()

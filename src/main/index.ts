@@ -51,8 +51,15 @@ if (gotLock) app.whenReady().then(() => {
   handle('diary:list', () => store.list())
   handle('diary:save', input => { if (importing) throw new Error('正在恢复备份，请稍后重试'); return store.save(input) })
   handle('diary:remove', date => { if (importing) throw new Error('正在恢复备份'); store.remove(date) })
+  handle('transactions:list', month => store.listTransactions(month))
+  handle('transactions:save', input => { if (importing) throw new Error('正在恢复备份'); return store.saveTransaction(input) })
+  handle('transactions:remove', id => { if (importing) throw new Error('正在恢复备份'); store.removeTransaction(id) })
+  handle('transactions:confirm-discard', async () => {
+    const result = await dialog.showMessageBox(window!, { type: 'question', title: '账目尚未保存', message: '放弃这笔账目的未保存修改？', detail: '已经保存的账目不受影响。', buttons: ['继续编辑', '放弃修改'], defaultId: 0, cancelId: 0 })
+    return result.response === 1
+  })
   handle('backup:export', async () => {
-    const result = await dialog.showSaveDialog(window!, { title: '导出日记备份', defaultPath: `little-days-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: '手账备份', extensions: ['json'] }] })
+    const result = await dialog.showSaveDialog(window!, { title: '导出手账备份（含日记和账目）', defaultPath: `little-days-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: '手账备份', extensions: ['json'] }] })
     if (result.canceled || !result.filePath) return false
     writeFileSync(result.filePath, JSON.stringify(store.backup(), null, 2), 'utf8')
     return true
@@ -61,12 +68,12 @@ if (gotLock) app.whenReady().then(() => {
     if (importing) throw new Error('正在恢复备份')
     importing = true
     try {
-      const result = await dialog.showOpenDialog(window!, { title: '选择日记备份', properties: ['openFile'], filters: [{ name: '手账备份', extensions: ['json'] }] })
+      const result = await dialog.showOpenDialog(window!, { title: '选择手账备份', properties: ['openFile'], filters: [{ name: '手账备份', extensions: ['json'] }] })
       if (result.canceled || !result.filePaths[0]) return null
       if (statSync(result.filePaths[0]).size > 20 * 1024 * 1024) throw new Error('备份超过 20 MB')
       const backup: unknown = JSON.parse(readFileSync(result.filePaths[0], 'utf8'))
       const entries = parseBackup(backup)
-      const answer = await dialog.showMessageBox(window!, { type: 'question', title: '恢复备份', message: `将导入 ${entries.length} 篇日记`, detail: '相同日期的日记将被备份中的内容覆盖，其余日期保留。恢复前会自动保存一份安全备份到应用数据目录。', buttons: ['取消', '恢复备份'], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window!, { type: 'question', title: '恢复备份', message: `将导入 ${entries.diaries.length} 篇日记、${entries.transactions.length} 笔账目`, detail: '相同日期的日记、相同编号的账目会被覆盖，其余记录保留。旧版日记备份不会改变账目。恢复前会自动保存一份安全备份到应用数据目录。', buttons: ['取消', '恢复备份'], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return null
       writeFileSync(join(dataDir, `before-import-${Date.now()}.json`), JSON.stringify(store.backup()), { encoding: 'utf8', flag: 'wx' })
       return store.restore(backup)
