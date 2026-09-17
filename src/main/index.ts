@@ -58,8 +58,17 @@ if (gotLock) app.whenReady().then(() => {
     const result = await dialog.showMessageBox(window!, { type: 'question', title: '账目尚未保存', message: '放弃这笔账目的未保存修改？', detail: '已经保存的账目不受影响。', buttons: ['继续编辑', '放弃修改'], defaultId: 0, cancelId: 0 })
     return result.response === 1
   })
+  handle('health:list', month => store.listHealth(month))
+  handle('health:save-meal', input => { if (importing) throw new Error('正在恢复备份'); return store.saveMeal(input) })
+  handle('health:remove-meal', id => { if (importing) throw new Error('正在恢复备份'); store.removeMeal(id) })
+  handle('health:save-weight', input => { if (importing) throw new Error('正在恢复备份'); return store.saveWeight(input) })
+  handle('health:remove-weight', date => { if (importing) throw new Error('正在恢复备份'); store.removeWeight(date) })
+  handle('health:confirm-discard', async () => {
+    const result = await dialog.showMessageBox(window!, { type: 'question', title: '记录尚未保存', message: '放弃这次未保存的修改？', buttons: ['继续编辑', '放弃修改'], defaultId: 0, cancelId: 0 })
+    return result.response === 1
+  })
   handle('backup:export', async () => {
-    const result = await dialog.showSaveDialog(window!, { title: '导出手账备份（含日记和账目）', defaultPath: `little-days-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: '手账备份', extensions: ['json'] }] })
+    const result = await dialog.showSaveDialog(window!, { title: '导出全部手账记录', defaultPath: `little-days-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: '手账备份', extensions: ['json'] }] })
     if (result.canceled || !result.filePath) return false
     writeFileSync(result.filePath, JSON.stringify(store.backup(), null, 2), 'utf8')
     return true
@@ -73,7 +82,7 @@ if (gotLock) app.whenReady().then(() => {
       if (statSync(result.filePaths[0]).size > 20 * 1024 * 1024) throw new Error('备份超过 20 MB')
       const backup: unknown = JSON.parse(readFileSync(result.filePaths[0], 'utf8'))
       const entries = parseBackup(backup)
-      const answer = await dialog.showMessageBox(window!, { type: 'question', title: '恢复备份', message: `将导入 ${entries.diaries.length} 篇日记、${entries.transactions.length} 笔账目`, detail: '相同日期的日记、相同编号的账目会被覆盖，其余记录保留。旧版日记备份不会改变账目。恢复前会自动保存一份安全备份到应用数据目录。', buttons: ['取消', '恢复备份'], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window!, { type: 'question', title: '恢复备份', message: `导入 ${entries.diaries.length} 篇日记、${entries.transactions.length} 笔账目、${entries.meals.length} 条饮食、${entries.weights.length} 条体重`, detail: '日记和体重按日期合并，账目和饮食按编号合并；其他记录保留。旧版备份不改变缺少的模块。恢复前会自动保存一份安全备份。', buttons: ['取消', '恢复备份'], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return null
       writeFileSync(join(dataDir, `before-import-${Date.now()}.json`), JSON.stringify(store.backup()), { encoding: 'utf8', flag: 'wx' })
       return store.restore(backup)

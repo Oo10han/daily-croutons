@@ -1,0 +1,60 @@
+.health-page { display:flex; flex:1; flex-direction:column; min-height:0; }
+.health-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; gap:16px; }
+.health-heading h1 { font-size:27px; }
+.health-heading h1 span { font-size:11px; }
+.health-buttons { display:flex; gap:10px; flex-shrink:0; }
+.health-buttons button { padding:10px 14px; font-size:12px; }
+.health-scroll { flex:1; min-height:0; overflow:auto; padding-right:5px; padding-bottom:4px; }
+.health-notice { font-size:11px; color:#748566; margin-bottom:10px; }
+.health-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
+.health-stats>div { padding:17px 20px; background:#eef2e6; border:1px solid #dfe6d5; border-radius:10px; }
+.health-stats>div:first-child { background:#fffef9; border-color:#e5e5da; }
+.health-stats span { display:block; font-size:11px; color:#8d9980; }
+.health-stats strong { display:block; font-size:25px; font-weight:500; color:#607752; margin:10px 0 8px; font-variant-numeric:tabular-nums; }
+.health-stats em { font-size:12px; font-style:normal; }
+.health-stats small { font-size:10px; color:#9da58f; }
+.health-card { background:#fffef9; border:1px solid #e5e5da; border-radius:10px; padding:20px; }
+.health-card-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.health-card h2 { font-size:13px; font-weight:500; margin:0; }
+.health-card-heading>span { font-size:10px; color:#96a085; }
+.weight-chart { margin-bottom:18px; padding-bottom:10px; }
+.weight-chart svg { width:100%; height:170px; display:block; margin-top:4px; overflow:visible; }
+.weight-chart text { font-size:9px; fill:#9da78f; }
+.chart-grid { stroke:#e8ecdf; stroke-dasharray:4 4; }
+.chart-line { fill:none; stroke:#81996d; stroke-width:2; stroke-linejoin:round; }
+.chart-point { fill:#fffef9; stroke:#81996d; stroke-width:2; }
+.health-empty { color:#a4ad97; text-align:center; padding:22px 0; font-size:11px; line-height:1.9; }
+.chart-empty { height:170px; display:grid; place-items:center; }
+.health-columns { display:grid; grid-template-columns:1.3fr 1fr; gap:18px; align-items:start; }
+.meal-group { border-top:1px solid #edefe4; padding-top:12px; margin-top:14px; }
+.meal-slot { display:flex; align-items:center; justify-content:space-between; }
+.meal-slot strong { font-size:12px; color:#6e825d; font-weight:500; }
+.meal-slot button { padding:1px 7px; color:#93a37f; font-size:17px; }
+.meal-placeholder { font-size:10px; color:#b0b7a4; margin:6px 0; }
+.meal-entry { padding-top:6px; }
+.meal-entry+.meal-entry { border-top:1px dashed #eceee4; margin-top:7px; }
+.meal-entry p { font-size:12px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; margin:4px 0; }
+.meal-entry>small { font-size:10px; color:#97a088; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; }
+.health-row-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:3px; }
+.health-row-actions button { font-size:10px; color:#98a387; padding:4px 6px; }
+.weight-entry { padding:15px 0 8px; border-bottom:1px solid #ecefe3; }
+.weight-entry:last-child { border-bottom:0; }
+.weight-entry>div:first-child { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.weight-entry time { font-size:11px; color:#929f82; }
+.weight-entry strong { font-size:17px; font-weight:500; color:#607851; font-variant-numeric:tabular-nums; }
+.weight-entry strong small { font-size:10px; }
+.weight-entry p { font-size:10px; line-height:1.8; color:#98a38b; margin:8px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.health-form-hint { font-size:10px; color:#95a183; line-height:1.7; }
+.health-modal .form-two { grid-template-columns:1fr 1fr; }
+@media(max-width:1100px) {
+  .health-heading { align-items:flex-start; }
+  .health-heading h1 { font-size:23px; }
+  .health-heading h1 span { display:block; margin:8px 0 0; }
+  .health-buttons button { padding:9px 10px; font-size:11px; }
+  .health-stats { gap:10px; }
+  .health-stats>div { padding:14px 12px; }
+  .health-stats strong { font-size:21px; }
+  .health-card { padding:15px; }
+  .health-columns { gap:12px; }
+}
+@media(max-height:700px) { .sidebar .brand { margin-bottom:22px; } .sidebar .calendar { margin-top:18px; } .sidebar .history { margin-top:18px; padding-top:14px; } }

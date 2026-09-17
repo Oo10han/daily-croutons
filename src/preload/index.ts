@@ -13,6 +13,14 @@ const api: JournalAPI = {
     remove: id => ipcRenderer.invoke('transactions:remove', id),
     confirmDiscard: () => ipcRenderer.invoke('transactions:confirm-discard')
   },
+  health: {
+    list: month => ipcRenderer.invoke('health:list', month),
+    saveMeal: input => ipcRenderer.invoke('health:save-meal', input),
+    removeMeal: id => ipcRenderer.invoke('health:remove-meal', id),
+    saveWeight: input => ipcRenderer.invoke('health:save-weight', input),
+    removeWeight: date => ipcRenderer.invoke('health:remove-weight', date),
+    confirmDiscard: () => ipcRenderer.invoke('health:confirm-discard')
+  },
   onCloseRequest: callback => {
     ipcRenderer.on('app:close-request', callback)
     return () => ipcRenderer.removeListener('app:close-request', callback)
