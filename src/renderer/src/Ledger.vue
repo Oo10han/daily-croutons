@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { amountText, categories, money, parseAmount, totals } from '../../shared/finance'
+import { amountText, categories, money, parseAmount, totals, dailyTotals, type DailyTotal } from '../../shared/finance'
+import LedgerCalendar from './LedgerCalendar.vue'
 import type { Transaction, TransactionType } from '../../shared/types'
 
 const props = defineProps<{ month: string; selected: string; refreshToken: number; disabled: boolean }>()
-const emit = defineEmits<{ dates: [dates: string[]]; navigate: [date: string] }>()
+const emit = defineEmits<{ dates: [dates: string[]]; navigate: [date: string]; shift: [delta: number]; daily: [totals: Record<string, DailyTotal>]; loadState: [state: 'loading' | 'ready' | 'error'] }>()
+const display = ref<'calendar' | 'list'>('calendar')
+let requestedDay: string | null = null
 const rows = ref<Transaction[]>([]), loading = ref(false), saving = ref(false)
 const error = ref(''), message = ref(''), formError = ref('')
 const scope = ref<'month' | 'day'>('month'), typeFilter = ref('all'), categoryFilter = ref('all'), search = ref('')
@@ -13,6 +16,14 @@ const draft = reactive({ id: undefined as string | undefined, date: '', type: 'e
 let initialDraft = '', request = 0, previousFocus: HTMLElement | null = null, confirming = false
 const monthLabel = computed(() => `${props.month.slice(0, 4)} 年 ${Number(props.month.slice(5))} 月`)
 const summary = computed(() => totals(rows.value))
+const byDay = computed(() => dailyTotals(rows.value))
+watch(byDay, value => emit('daily', value), { immediate: true })
+function openDay(date: string) {
+  // 从日历进入当天明细时清除旧筛选，显示当天的全部收入和支出。
+  typeFilter.value = 'all'; categoryFilter.value = 'all'; search.value = ''
+  requestedDay = date
+  scope.value = 'day'; display.value = 'list'; emit('navigate', date)
+}
 const filterCategories = computed(() => typeFilter.value === 'all' ? [...new Set([...categories.expense, ...categories.income])] : categories[typeFilter.value as TransactionType])
 const filtered = computed(() => rows.value.filter(row =>
   (scope.value === 'month' || row.date === props.selected) &&
@@ -28,6 +39,7 @@ const groups = computed(() => {
 })
 const distribution = computed(() => categories.expense.map(category => ({ category, amount: rows.value.filter(r => r.type === 'expense' && r.category === category).reduce((sum, r) => sum + r.amountCents, 0) })).filter(r => r.amount > 0).sort((a, b) => b.amount - a.amount))
 const changed = computed(() => editing.value && JSON.stringify(draft) !== initialDraft)
+watch([loading, error], () => emit('loadState', loading.value ? 'loading' : error.value ? 'error' : 'ready'), { immediate: true })
 async function refresh() {
   // 月份快速切换时，只接收最后一次请求，避免旧月份覆盖当前列表。
   const id = ++request
@@ -41,8 +53,12 @@ async function refresh() {
 }
 watch(() => [props.month, props.refreshToken], () => { rows.value = []; emit('dates', []); void refresh() }, { immediate: true })
 watch(typeFilter, () => { categoryFilter.value = 'all' })
-watch(() => props.month, () => { scope.value = 'month' })
-watch(() => props.selected, () => { if (props.selected.startsWith(props.month)) scope.value = 'day' })
+watch(() => [props.month, props.selected], ([month, selected], [oldMonth, oldSelected]) => {
+  // 跨月点击日期时，日期和月份可能先后更新，等两者对齐后再显示当天。
+  if (requestedDay === selected && selected.startsWith(month)) { scope.value = 'day'; requestedDay = null }
+  else if (month !== oldMonth) scope.value = 'month'
+  else if (selected !== oldSelected && selected.startsWith(month)) scope.value = 'day'
+})
 async function focusDialog() { await nextTick(); dialogElement.value?.querySelector<HTMLElement>('input,button')?.focus() }
 function open(row?: Transaction) {
   previousFocus = document.activeElement as HTMLElement
@@ -95,8 +111,8 @@ defineExpose({ beforeClose, saveDraft })
 </script>
 
 <template>
-  <section class="ledger">
-    <div class="ledger-heading"><div><div class="eyebrow">把每一笔，记得清清楚楚</div><h1>生活账本 <span>{{ monthLabel }}</span></h1></div><button class="save-button" :disabled="disabled || loading" @click="open()">＋ 记一笔</button></div>
+  <section class="ledger" :class="{ 'calendar-mode': display === 'calendar' }">
+    <div class="ledger-heading"><div><div class="eyebrow">把每一笔，记得清清楚楚</div><h1>生活账本 <span>{{ monthLabel }}</span></h1></div><div class="ledger-heading-actions"><div class="ledger-view-tabs"><button :class="{ active: display === 'calendar' }" :aria-pressed="display === 'calendar'" @click="display = 'calendar'">收支日历</button><button :class="{ active: display === 'list' }" :aria-pressed="display === 'list'" @click="display = 'list'">收支明细</button></div><button class="save-button" :disabled="disabled || loading" @click="open()">＋ 记一笔</button></div></div>
     <div v-if="error" class="message error" role="alert">{{ error }} <button @click="refresh">重新加载</button></div>
     <div v-if="message" class="ledger-notice" role="status">{{ message }}</div>
     <div class="ledger-stats" :aria-busy="loading">
@@ -104,7 +120,8 @@ defineExpose({ beforeClose, saveDraft })
       <div><span>月收入</span><strong class="income" data-testid="month-income">{{ loading || error ? '—' : money(summary.income) }}</strong><small>每一份收入都值得记录</small></div>
       <div class="balance-card"><span>月收支差额</span><strong data-testid="month-balance">{{ loading || error ? '—' : money(summary.balance) }}</strong><small>收入 − 支出 · 非账户余额</small></div>
     </div>
-    <div class="ledger-content">
+    <LedgerCalendar v-if="display === 'calendar'" :month="month" :selected="selected" :totals="byDay" :loading="loading" :failed="!!error" :disabled="disabled" @select="openDay" @shift="emit('shift', $event)" />
+    <div v-show="display === 'list'" class="ledger-content">
       <section class="ledger-list">
         <div class="ledger-list-header"><h2>收支明细</h2><div class="scope-tabs"><button :class="{ active: scope === 'month' }" @click="scope = 'month'">整月</button><button :class="{ active: scope === 'day' }" :disabled="!selected.startsWith(month)" @click="scope = 'day'">{{ Number(selected.slice(5,7)) }}/{{ Number(selected.slice(8)) }} 当天</button></div></div>
         <div class="ledger-filters"><select v-model="typeFilter" aria-label="收支筛选"><option value="all">全部收支</option><option value="expense">支出</option><option value="income">收入</option></select><select v-model="categoryFilter" aria-label="分类筛选"><option value="all">全部分类</option><option v-for="item in filterCategories" :key="item">{{ item }}</option></select><input v-model="search" aria-label="搜索账目" placeholder="搜索备注、分类…" /></div>

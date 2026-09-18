@@ -22,3 +22,13 @@ export function totals(rows: Transaction[]) {
   const expense = rows.filter(r => r.type === 'expense').reduce((sum, r) => sum + r.amountCents, 0)
   return { income, expense, balance: income - expense }
 }
+export interface DailyTotal { income: number; expense: number }
+// 日历汇总整月原始账目，不受明细中的类型、分类和搜索筛选影响。
+export function dailyTotals(rows: Transaction[]): Record<string, DailyTotal> {
+  const days: Record<string, DailyTotal> = {}
+  for (const row of rows) {
+    const total = days[row.date] ??= { income: 0, expense: 0 }
+    total[row.type] += row.amountCents
+  }
+  return days
+}

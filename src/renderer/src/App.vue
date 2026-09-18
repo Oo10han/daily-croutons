@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { moods, type DiaryInput, type DiarySummary, type Mood } from '../../shared/types'
 import Ledger from './Ledger.vue'
 import Health from './Health.vue'
+import { money, type DailyTotal } from '../../shared/finance'
 
 function dateKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const today = dateKey(new Date())
@@ -17,6 +18,14 @@ const health = ref<InstanceType<typeof Health> | null>(null)
 const healthDates = ref<string[]>([])
 const pageTitle = computed(() => ({ diary: '日记', ledger: '生活账本', health: '饮食与体重' })[view.value])
 const ledgerDates = ref<string[]>([]), refreshToken = ref(0)
+const ledgerDaily = ref<Record<string, DailyTotal>>({})
+const ledgerState = ref<'loading' | 'ready' | 'error'>('loading')
+function dateTitle(date: string) {
+  const total = ledgerDaily.value[date]
+  if (view.value !== 'ledger' || !date.startsWith(monthKey.value)) return date
+  if (ledgerState.value !== 'ready') return `${date} ${ledgerState.value === 'loading' ? '正在读取' : '读取失败'}`
+  return `${date} 收入 ${money(total?.income ?? 0)}，支出 ${money(total?.expense ?? 0)}`
+}
 const monthKey = computed(() => dateKey(month.value).slice(0, 7))
 const ready = ref(false), busy = ref(false), dirty = ref(false), saving = ref(false)
 const error = ref(''), notice = ref(''), search = ref(''), deleteOpen = ref(false)
@@ -152,13 +161,13 @@ onUnmounted(() => { clearTimeout(timer); unsubscribe?.(); window.removeEventList
       <section class="calendar" aria-label="日历">
         <div class="calendar-header"><strong>{{ monthHeading }}</strong><div><button aria-label="上个月" @click="shiftMonth(-1)">‹</button><button aria-label="下个月" @click="shiftMonth(1)">›</button></div></div>
         <div class="weekdays"><span v-for="day in ['一','二','三','四','五','六','日']" :key="day">{{ day }}</span></div>
-        <div class="days"><button v-for="cell in cells" :key="cell.key" :aria-label="cell.key" :aria-pressed="cell.key === selected" :class="{ outside: cell.outside, selected: cell.key === selected, today: cell.key === today, recorded: datesWithEntries.has(cell.key) }" :disabled="busy || !ready || cell.key < '1900-01-01' || cell.key > '9999-12-31'" @click="select(cell.key)">{{ cell.day }}</button></div>
+        <div class="days"><button v-for="cell in cells" :key="cell.key" :title="dateTitle(cell.key)" :aria-label="cell.key" :aria-pressed="cell.key === selected" :class="{ outside: cell.outside, selected: cell.key === selected, today: cell.key === today, recorded: datesWithEntries.has(cell.key) }" :disabled="busy || !ready || cell.key < '1900-01-01' || cell.key > '9999-12-31'" @click="select(cell.key)">{{ cell.day }}</button></div>
         <div class="calendar-foot"><span>{{ view === 'diary' ? `本月记录了 ${monthCount} 天` : view === 'ledger' ? `本月 ${ledgerDates.length} 笔账目` : `本月记录了 ${healthDates.length} 天` }}</span><button :disabled="busy || !ready" @click="select(today)">回到今天 ↗</button></div>
       </section>
       <section class="history"><div class="section-label">翻翻以前 <span>{{ records.length }} 篇</span></div><input v-model="search" aria-label="查找日记" placeholder="按标题或日期查找…" class="search" />
         <div class="history-list"><button v-for="entry in recent" :key="entry.date" :class="{ active: entry.date === selected }" :disabled="busy || !ready" @click="select(entry.date)"><span class="entry-date">{{ entry.date.replaceAll('-', '.') }} <span>{{ icons[entry.mood] }}</span></span><strong>{{ entry.title || '未命名日记' }}</strong></button><p v-if="!recent.length" class="empty">{{ search ? '没有找到匹配的日记' : '写下第一篇，故事从这里开始。' }}</p></div>
       </section>
-      <div class="sidebar-bottom"><span class="local-dot"></span> 本地手账 · 无需联网 <small>v0.3</small></div>
+      <div class="sidebar-bottom"><span class="local-dot"></span> 本地手账 · 无需联网 <small>v0.4</small></div>
     </aside>
     <main>
       <header class="topbar"><span>我的手账 <span class="slash">/</span> {{ pageTitle }}</span><div><button :disabled="busy || !ready" @click="backup('import')">恢复备份</button><button class="outline" :disabled="busy || !ready" @click="backup('export')">↥ 导出备份</button></div></header>
@@ -176,7 +185,7 @@ onUnmounted(() => { clearTimeout(timer); unsubscribe?.(); window.removeEventList
           <footer class="paper-footer"><span>{{ wordCount.toLocaleString() }} 字 <span class="footer-dot">·</span> 随写随存</span><div><button class="delete-button" :disabled="busy || !ready || (!diaryDates.has(selected) && !dirty)" @click="deleteOpen = true">删除日记</button><button class="save-button" :disabled="busy || !ready || saving || !dirty" @click="saveNow">保存日记</button></div></footer>
         </article>
         <div v-show="view === 'diary'" class="bottom-note"><span>✦ 平凡的一天，也值得被记住。</span><span>Ctrl / ⌘ + S 保存</span></div>
-        <Ledger v-if="ready" v-show="view === 'ledger'" ref="ledger" :month="monthKey" :selected="selected" :refresh-token="refreshToken" :disabled="busy" @dates="ledgerDates = $event" @navigate="select" />
+        <Ledger v-if="ready" v-show="view === 'ledger'" ref="ledger" :month="monthKey" :selected="selected" :refresh-token="refreshToken" :disabled="busy" @dates="ledgerDates = $event" @daily="ledgerDaily = $event" @load-state="ledgerState = $event" @navigate="select" @shift="shiftMonth" />
         <Health v-if="ready" v-show="view === 'health'" ref="health" :month="monthKey" :selected="selected" :refresh-token="refreshToken" :disabled="busy" @dates="healthDates = $event" @navigate="select" />
       </div>
     </main>
