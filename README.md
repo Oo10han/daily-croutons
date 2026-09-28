@@ -53,6 +53,8 @@ git clone https://github.com/Oo10han/daily-croutons.git
 cd daily-croutons
 pnpm install
 pnpm dev
+pnpm.cmd dev --watch
+如果提示找不到 pnpm.cmd 或 node，说明当前终端没有配置工具路径，就用之前的完整命令：
 ```
 
 首次安装会下载 Electron 运行时。通过 Electron 启动应用，单独打开网页无法访问本地数据库。

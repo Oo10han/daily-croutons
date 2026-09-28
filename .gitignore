@@ -7,6 +7,8 @@ test-results/
 Thumbs.db
 .env
 .env.*
+.vs
+.vs.*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
