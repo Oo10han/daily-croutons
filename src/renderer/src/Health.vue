@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useModalKeyboard } from './composables/useModalKeyboard'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { mealSlots, type HealthMonth, type Meal, type MealSlot, type Weight } from '../../shared/types'
 import { kilograms, parseWeight } from '../../shared/health'
 
@@ -37,6 +38,7 @@ const chart = computed(() => {
 const changed = computed(() => !!formKind.value && JSON.stringify(draft) !== initialDraft)
 
 async function refresh() {
+  // 快速切月时只接收最后一次请求，避免旧月响应覆盖新月的数据或错误状态。
   const id = ++request
   loading.value = true; error.value = ''
   try {
@@ -106,17 +108,10 @@ async function remove() {
     deleting.value = null; message.value = '记录已删除'; await refresh(); previousFocus?.focus()
   } catch (e) { formError.value = String(e) } finally { saving.value = false }
 }
-function keydown(event: KeyboardEvent) {
-  if (!formKind.value && !deleting.value) return
-  if (event.key === 'Escape') { event.preventDefault(); void dismiss() }
-  if (event.key !== 'Tab') return
-  const items = Array.from(dialogElement.value?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)') ?? [])
-  const first = items[0], last = items.at(-1)
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-}
-onMounted(() => window.addEventListener('keydown', keydown))
-onBeforeUnmount(() => { request++; window.removeEventListener('keydown', keydown) })
+// 页面卸载时让未完成的读取失效，避免旧请求再更新页面状态。
+useModalKeyboard(dialogElement, () => !!formKind.value || !!deleting.value, dismiss)
+onBeforeUnmount(() => { request++ })
+
 defineExpose({ beforeClose, saveDraft })
 </script>
 

@@ -88,7 +88,32 @@ tests/            数据库和桌面端测试
 
 数据库读写在主进程执行，界面通过 preload 调用业务接口。渲染进程启用沙箱和上下文隔离，日记内容按纯文本处理。
 
-`Ledger.vue` 负责记账界面，`Health.vue` 负责饮食、体重和趋势图；`shared/finance.ts`、`shared/health.ts` 处理金额与体重的单位换算。数据库读写及迁移集中在 `main/database.ts`。
+`Ledger.vue` 负责记账界面，`Health.vue` 负责饮食、体重和趋势图；`shared/finance.ts`、`shared/health.ts` 处理金额与体重的单位换算。数据库读写集中在 `main/database.ts`，由它调用独立的迁移、校验和备份解析模块。
+
+### 维护入口
+
+| 模块 | 职责与修改位置 |
+| --- | --- |
+| `main/index.ts` | 应用启动、单实例锁、数据目录和退出清理 |
+| `main/window.ts` | 窗口创建、安全设置、IPC 来源检查和关闭握手 |
+| `main/ipc.ts` | 业务接口接线、恢复期间的写入保护、放弃编辑确认 |
+| `main/backup-service.ts` | 文件选择、导出、恢复确认及恢复前安全备份 |
+| `main/backup-format.ts` | v1/v2/v3 备份解析、数量限制、重复键检查 |
+| `main/validation.ts` | IPC 和备份共用的运行时输入校验，不访问数据库 |
+| `main/migrations.ts` | SQLite 配置、建表、版本升级；由存储层调用 |
+| `main/database.ts` | SQL 读写、连接生命周期、跨模块恢复事务 |
+| `shared/types.ts`、`shared/ipc.ts` | 业务数据和 API 类型、IPC 通道与签名映射 |
+| `preload/index.ts` | 向页面暴露有限的业务 API，不暴露任意 IPC 或 Node 能力 |
+| `renderer/src/App.vue` | 页面导航、共享日期、备份操作和关闭前协调 |
+| `renderer/src/composables/useDiary.ts` | 日记编辑状态、防抖保存、串行写入与失败重试 |
+| `renderer/src/composables/useModalKeyboard.ts` | 弹窗 Escape、Tab 焦点循环和监听清理 |
+| `renderer/src/utils/calendar.ts` | 本地日期格式和周一开头的六周日历，两处日历共用 |
+
+新增业务接口时，同步修改 `shared/types.ts`、`shared/ipc.ts`、preload 和主进程处理器；类型检查只能约束代码接线，外部参数仍必须经过运行时校验。新增 SQL 或调整恢复规则时，保持同一 `DiaryStore` 连接上的事务边界，并运行数据库测试。
+
+日记切换日期、导出/恢复和正常关闭前必须等待 `useDiary.flush()`。保存队列在执行时获取快照，以编辑版本号判断是否清除未保存标记。账目、饮食和体重仍由各自页面管理显式保存的草稿；共用弹窗模块仅负责键盘交互。
+
+修改关闭流程、preload 或 Vue 交互后，先执行 `pnpm build` 再运行 `pnpm test:e2e`；数据库测试不能代替桌面端验证。行为、备份兼容和数据路径说明见下方「数据与备份」及上方各功能章节。
 
 构建依赖中的 `@electron/get` 固定为 4.0.3，以提供 electron-builder 所需的 CacheMode API；升级打包工具时需一并检查此覆盖配置。
 

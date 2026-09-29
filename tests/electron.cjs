@@ -84,8 +84,29 @@ async function closeWithFlush() {
     await instance.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 650))
     await expect(page.getByRole('button', { name: '保存日记', exact: true })).toBeInViewport()
     assert.deepEqual(errors, [])
+    // 两个业务页面共用键盘模块：焦点不能越过弹窗，Escape 后应回到触发按钮。
+    for (const scenario of [
+      { page: '生活账本', open: '＋ 记一笔', dialog: '.ledger-modal' },
+      { page: '饮食与体重', open: '＋ 记录饮食', dialog: '.health-modal' }
+    ]) {
+      await page.getByRole('button', { name: scenario.page, exact: true }).click()
+      const trigger = page.getByRole('button', { name: scenario.open, exact: true })
+      await trigger.click()
+      const modal = page.locator(scenario.dialog)
+      await expect(modal).toBeVisible()
+      const controls = modal.locator('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')
+      await controls.first().focus()
+      await page.keyboard.press('Shift+Tab')
+      await expect(controls.last()).toBeFocused()
+      await page.keyboard.press('Tab')
+      await expect(controls.first()).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(modal).not.toBeVisible()
+      await expect(trigger).toBeFocused()
+    }
+    assert.deepEqual(errors, [])
     await closeWithFlush()
-    console.log('PASS: date isolation, immediate close/reopen persistence, IPC isolation, export/import, recovery backup, delete/cancel, renderer screenshot')
+    console.log('PASS: date isolation, immediate close/reopen persistence, IPC isolation, export/import, recovery backup, delete/cancel, renderer screenshot, ledger/health modal keyboard')
   } finally {
     if (instance) await instance.close()
     fs.rmSync(temp, { recursive: true, force: true })

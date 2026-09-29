@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { moods, type DiaryInput, type DiarySummary, type Mood } from '../../shared/types'
+import { moods, type Mood } from '../../shared/types'
 import Ledger from './Ledger.vue'
 import Health from './Health.vue'
+import { useDiary } from './composables/useDiary'
+import { dateKey, calendarCells } from './utils/calendar'
 import { money, type DailyTotal } from '../../shared/finance'
 
-function dateKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const today = dateKey(new Date())
 const selected = ref(today)
 const month = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-const title = ref(''), body = ref(''), mood = ref<Mood>('')
-const records = ref<DiarySummary[]>([])
+const { title, body, mood, records, dirty, saving, error, notice, deleteOpen, refresh, report, edited, flush, load } = useDiary(selected)
 type Page = 'diary' | 'ledger' | 'health'
 const view = ref<Page>('diary')
 const ledger = ref<InstanceType<typeof Ledger> | null>(null)
@@ -27,11 +27,7 @@ function dateTitle(date: string) {
   return `${date} 收入 ${money(total?.income ?? 0)}，支出 ${money(total?.expense ?? 0)}`
 }
 const monthKey = computed(() => dateKey(month.value).slice(0, 7))
-const ready = ref(false), busy = ref(false), dirty = ref(false), saving = ref(false)
-const error = ref(''), notice = ref(''), search = ref(''), deleteOpen = ref(false)
-let revision = 0
-let timer: ReturnType<typeof setTimeout> | undefined
-let pending: Promise<void> = Promise.resolve()
+const ready = ref(false), busy = ref(false), search = ref('')
 let unsubscribe: (() => void) | undefined
 const icons: Record<Mood, string> = { '': '○', 开心: '☀', 平静: '☁', 疲惫: '☾', 低落: '☂', 充实: '✦' }
 const selectedDate = computed(() => new Date(selected.value + 'T12:00:00'))
@@ -44,45 +40,7 @@ const recent = computed(() => records.value.filter(d => `${d.date} ${d.title}`.t
 const monthCount = computed(() => records.value.filter(d => d.date.startsWith(dateKey(month.value).slice(0, 7))).length)
 const wordCount = computed(() => body.value.replace(/\s/g, '').length)
 const status = computed(() => error.value ? '保存遇到问题' : saving.value ? '正在保存…' : dirty.value ? '等待保存…' : '已保存到本机')
-const cells = computed(() => {
-  const first = new Date(month.value.getFullYear(), month.value.getMonth(), 1)
-  const offset = (first.getDay() + 6) % 7
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(first.getFullYear(), first.getMonth(), i - offset + 1)
-    return { key: dateKey(d), day: d.getDate(), outside: d.getMonth() !== first.getMonth() }
-  })
-})
-async function refresh() { records.value = await window.journal.list() }
-function report(e: unknown) { error.value = e instanceof Error ? e.message : String(e) }
-function edited() {
-  dirty.value = true; revision++; notice.value = ''; error.value = ''
-  clearTimeout(timer)
-  timer = setTimeout(() => { void flush().catch(report) }, 550)
-}
-function flush(): Promise<void> {
-  clearTimeout(timer)
-  // Snapshot is taken when the queued write starts, so rapid edits cannot overwrite newer content.
-  pending = pending.catch(() => {}).then(async () => {
-    if (!dirty.value) return
-    const version = revision
-    const input: DiaryInput = { date: selected.value, title: title.value, body: body.value, mood: mood.value }
-    saving.value = true
-    try {
-      await window.journal.save(input)
-      if (revision === version) dirty.value = false
-      error.value = ''
-      await refresh()
-    } catch (e) { report(e); throw e }
-    finally { saving.value = false }
-  })
-  return pending
-}
-async function load(date: string) {
-  const entry = await window.journal.get(date)
-  selected.value = date
-  title.value = entry?.title ?? ''; body.value = entry?.body ?? ''; mood.value = entry?.mood ?? ''
-  dirty.value = false; revision++; error.value = ''; deleteOpen.value = false
-}
+const cells = computed(() => calendarCells(month.value))
 async function select(date: string) {
   if (busy.value || !ready.value) return
   busy.value = true
@@ -134,6 +92,7 @@ function shortcut(event: KeyboardEvent) {
 }
 onMounted(async () => {
   window.addEventListener('keydown', shortcut)
+  // 主进程先拦截关闭；表单处理与日记落盘成功后，才通知主进程真正关闭。
   unsubscribe = window.journal?.onCloseRequest(async () => {
     if (busy.value) { notice.value = '请等待当前操作完成后再关闭。'; return }
     busy.value = true
@@ -148,7 +107,7 @@ onMounted(async () => {
     await refresh(); await load(today); ready.value = true
   } catch (e) { report(e) }
 })
-onUnmounted(() => { clearTimeout(timer); unsubscribe?.(); window.removeEventListener('keydown', shortcut) })
+onUnmounted(() => { unsubscribe?.(); window.removeEventListener('keydown', shortcut) })
 </script>
 
 <template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useModalKeyboard } from './composables/useModalKeyboard'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { amountText, categories, money, parseAmount, totals, dailyTotals, type DailyTotal } from '../../shared/finance'
 import LedgerCalendar from './LedgerCalendar.vue'
 import type { Transaction, TransactionType } from '../../shared/types'
@@ -16,6 +17,7 @@ const draft = reactive({ id: undefined as string | undefined, date: '', type: 'e
 let initialDraft = '', request = 0, previousFocus: HTMLElement | null = null, confirming = false
 const monthLabel = computed(() => `${props.month.slice(0, 4)} 年 ${Number(props.month.slice(5))} 月`)
 const summary = computed(() => totals(rows.value))
+// 汇总和日历使用整月原始记录；列表筛选只影响下方明细及筛选合计。
 const byDay = computed(() => dailyTotals(rows.value))
 watch(byDay, value => emit('daily', value), { immediate: true })
 function openDay(date: string) {
@@ -95,18 +97,10 @@ async function remove() {
   try { await window.journal.transactions.remove(deleting.value.id); deleting.value = null; message.value = '账目已删除'; await refresh(); previousFocus?.focus() }
   catch (e) { formError.value = String(e) } finally { saving.value = false }
 }
-function keydown(event: KeyboardEvent) {
-  if (!editing.value && !deleting.value) return
-  if (event.key === 'Escape') { event.preventDefault(); void dismiss() }
-  if (event.key === 'Tab') {
-    const items = Array.from(dialogElement.value?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)') ?? [])
-    const first = items[0], last = items[items.length - 1]
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-  }
-}
-onMounted(() => window.addEventListener('keydown', keydown))
-onBeforeUnmount(() => { request++; window.removeEventListener('keydown', keydown) })
+// 页面卸载时让未完成的读取失效，避免旧请求再更新页面状态。
+useModalKeyboard(dialogElement, () => editing.value || !!deleting.value, dismiss)
+onBeforeUnmount(() => { request++ })
+
 defineExpose({ beforeClose, saveDraft })
 </script>
 

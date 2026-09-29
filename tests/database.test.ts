@@ -5,6 +5,37 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DiaryStore, validateDate } from '../src/main/database'
 
+test('拆分后的校验与备份解析保留四模块合并和旧版兼容规则', () => {
+  const source = new DiaryStore(':memory:'), target = new DiaryStore(':memory:')
+  try {
+    const date = '2024-02-29'
+    source.save({ date, title: '备份日记', body: '', mood: '' })
+    source.saveTransaction({ date, type: 'expense', amountCents: 1234, category: '餐饮', note: '' })
+    source.saveMeal({ date, slot: '早餐', food: '面包', note: '' })
+    source.saveWeight({ date, grams: 60120, note: '' })
+    const backup = source.backup()
+    const expected = { diaries: 1, transactions: 1, meals: 1, weights: 1 }
+    assert.deepEqual(target.restore(backup), expected)
+    assert.deepEqual(target.restore(backup), expected)
+    assert.equal(target.listTransactions('2024-02').length, 1)
+    assert.deepEqual(target.listHealth('2024-02'), source.listHealth('2024-02'))
+
+    // 最后一个模块无效时，前面已经通过校验的日记也不能写入。
+    const invalid = structuredClone(backup)
+    invalid.diaries[0].title = '不得部分恢复'
+    invalid.weights[0].grams = 60121
+    assert.throws(() => target.restore(invalid), /体重/)
+    assert.equal(target.get(date)?.title, '备份日记')
+    assert.throws(() => target.saveTransaction({ ...backup.transactions[0], amountCents: 1.5 }), /整数分/)
+
+    const { meals, weights, transactions, ...diaryBackup } = backup
+    assert.deepEqual(target.restore({ ...diaryBackup, version: 1 }), { diaries: 1, transactions: 0, meals: 0, weights: 0 })
+    assert.deepEqual(target.restore({ ...diaryBackup, transactions, version: 2 }), { diaries: 1, transactions: 1, meals: 0, weights: 0 })
+    assert.equal(target.listTransactions('2024-02').length, 1)
+    assert.deepEqual(target.listHealth('2024-02'), { meals, weights })
+  } finally { source.close(); target.close() }
+})
+
 test('日记在数据库关闭重开后保留；同日更新不产生重复记录', () => {
   const dir = mkdtempSync(join(tmpdir(), 'little-days-db-'))
   let store = new DiaryStore(join(dir, 'test.sqlite'))

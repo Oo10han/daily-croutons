@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { dateKey, calendarCells } from './utils/calendar'
 import { money, type DailyTotal } from '../../shared/finance'
 
 const props = defineProps<{
@@ -11,20 +12,10 @@ const props = defineProps<{
   failed: boolean
 }>()
 const emit = defineEmits<{ select: [date: string]; shift: [delta: number] }>()
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 const today = dateKey(new Date())
 const monthTitle = computed(() => `${props.month.slice(0, 4)} 年 ${Number(props.month.slice(5))} 月`)
-const cells = computed(() => {
-  const first = new Date(`${props.month}-01T12:00:00`)
-  const offset = (first.getDay() + 6) % 7
-  return Array.from({ length: 42 }, (_, i) => {
-    const date = new Date(first.getFullYear(), first.getMonth(), i - offset + 1)
-    const key = dateKey(date)
-    return { key, day: date.getDate(), outside: !key.startsWith(props.month), total: props.totals[key] }
-  })
-})
+const cells = computed(() => calendarCells(new Date(props.month + '-01T12:00:00'))
+  .map(cell => ({ ...cell, total: props.totals[cell.key] })))
 function label(cell: typeof cells.value[number]) {
   if (cell.outside) return `查看 ${cell.key}`
   if (props.loading) return `${cell.key} 正在读取`
